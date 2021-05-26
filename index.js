@@ -10,6 +10,7 @@ const {Deta} = require('deta')
 const deta = Deta(process.env.DETA)
 const FuzzySet = require('fuzzyset')
 const fs = require('fs')
+const schedule = require('node-schedule')
 
 const db_users = deta.Base('bot_users')
 const db_dist = deta.Base('districts')
@@ -29,6 +30,14 @@ function readDist(path) {
 
 function isValidPin(num){
 	return !isNaN(num)
+}
+
+function getTodaysDate() {
+	var d = new Date();
+	var curr_date = d.getDate();
+	var curr_month = d.getMonth()+1;
+	var curr_year = d.getFullYear();
+	return (curr_date + "-" + curr_month + "-" + curr_year);
 }
 
 client.login(process.env.TOKEN)
@@ -94,20 +103,94 @@ client.on('message', msg => {
 			.setColor('ORANGE')
 		msg.channel.send(intro)
 		const helpEmbed = new discord.MessageEmbed()
-			.setAuthor('Hi, thanks for using CoBot!', 'https://image.flaticon.com/icons/png/512/2913/2913584.png')
-			.setDescription('This bot helps you in registering for the vaccine and also notifies you about the available slots!!!')
+			.setAuthor('Hi, thanks for using swiftJAB!', 'https://image.flaticon.com/icons/png/512/2913/2913584.png')
+			.setDescription(`This bot helps you in registering for the vaccine and also notifies you about the available slots!!! <[Add me to another server](https://discord.com/api/oauth2/authorize?client_id=843522924442288138&permissions=8&scope=bot)>
+			ㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤ`)	
 			.setColor('RED')
-			.setImage('https://cdn.discordapp.com/attachments/844535408226074666/846612771152068618/vacci.jpg')
 			.addFields(
 				{
-					name: '**How to use me :interrobang:**\n\n',
-					value: '**:white_small_square: You can register using the following command**\n\n\t`$jab register <your-age> <your-pincode/District>`\n\n**:white_small_square:You can recieve notifications using the following command**\n\n\t`$jab notify`\n\n**:white_small_square:To know the availability of slots use the following command**\n\n\t`$jab slots <picode/District>`\n\n\n\n**[__Add me to another server__](https://discord.com/api/oauth2/authorize?client_id=843522924442288138&permissions=8&scope=bot)**'
+					name: '   How to use me   :interrobang:',
+					value: '**\:syringe: You can register using : **\nㅤㅤ`$jab register <your-age> <your-pincode/District>`\n\n**\:syringe: You can recieve notifications using : **\nㅤㅤ`$jab notify`\n\n**\:syringe: To know the availability of slots use : **\nㅤㅤ`$jab slots <picode/District>`\n\n\n\n'
 				}
-			)
+		)
+			.setImage('https://cdn.discordapp.com/attachments/792638606829289486/846991360866648104/SquarePic_20210524_23412897.jpg')
+			
 		msg.author.send(helpEmbed)
 	}
 });
-				
+
+schedule.scheduleJob('*/15 * * * * *', () => {
+	async function schJob() {
+		const item = await db_h.fetch().next()
+		return item
+	}
+	schJob().then(item => {
+		item.value.forEach(id => {
+			async function getPinFromDb() {
+				const item = await db_users.get(id.key)
+				return item
+			}
+			getPinFromDb().then(item => {
+				return item.pin
+			}).then((pin) => {
+				axios.get(`https://cdn-api.co-vin.in/api/v2/appointment/sessions/public/calendarByPin`, {
+					headers: {
+						'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:89.0) Gecko/20100101 Firefox/89.0'
+					},
+					params: {
+						pincode: pin,
+						date: getTodaysDate()
+					}
+				})
+					.then((resp) => {
+						if (resp.data.centers[0]) {
+
+							resp.data.centers.forEach(center => {
+								if (center.sessions) {
+									center.sessions.forEach(element => {
+						
+										//console.log(element.center_id);
+										var ary = [];
+										ary.push(element.center_id);
+										ary.forEach((i) => {
+											
+											const exampleEmbed1 = new discord.MessageEmbed()
+												.setColor('#0099ff')
+												.addFields(
+													{ name: 'Centreㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤ', value: center.name, inline: true },
+													{ name: 'Dosesㅤ', value: element.available_capacity, inline: true },
+													{ name: 'Vaccine', value: element.vaccine, inline: true },
+												)
+											// message.author.send(exampleEmbed1);
+											async function notify() {
+												let member = await client.users.fetch(id.key)
+												return member
+											}
+											notify().then(member => {
+												member.send(exampleEmbed1)
+											})
+										})
+									})
+								}
+					
+							})
+						}
+						else {
+							async function notify() {
+								let member = await client.user.fetch(id)
+								return member
+							}
+							notify().then(member => {
+								member.send('Slots are not currently available')
+							})
+	
+						}
+					})
+			})
+		}
+		)
+	})
+})
 
 
 client.on('message', (message) => {
